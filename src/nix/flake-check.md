@@ -35,6 +35,7 @@ The following flake output attributes must be derivations:
 * `devShell.`*system*
 * `devShells.`*system*`.`*name*
 * `nixosConfigurations.`*name*`.config.system.build.toplevel`
+* `configurations.nixos.`*system*`.`*name*`.config.system.build.toplevel`
 * `packages.`*system*`.`*name*
 
 The following flake output attributes must be [app

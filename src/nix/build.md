@@ -52,7 +52,7 @@ R""(
 
   ```console
   # nix build --profile /nix/var/nix/profiles/system \
-      ~/my-configurations#nixosConfigurations.machine.config.system.build.toplevel
+      ~/my-configurations#configurations.nixos.x86_64-linux.machine.config.system.build.toplevel
   ```
 
   (This is essentially what `nixos-rebuild` does.)

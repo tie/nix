@@ -51,6 +51,10 @@ cat >flake.nix <<EOF
     packages.$system = { };
     packages.someOtherSystem = { };
 
+    configurations.nixos.$system = { };
+    configurations.nixos.someOtherSystem = { };
+    configurations.somethingElse = { };
+
     formatter = { };
     nixosConfigurations = { };
     nixosModules = { };

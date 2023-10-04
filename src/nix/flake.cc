@@ -527,6 +527,7 @@ struct CmdFlakeCheck : FlakeCommand
                             name == "overlay" ? "overlays.default" :
                             name == "devShell" ? "devShells.<system>.default" :
                             name == "nixosModule" ? "nixosModules.default" :
+                            name == "nixosConfigurations" ? "configurations.nixos.<system>.<name>" :
                             "";
                         if (replacement != "")
                             warn("flake output attribute '%s' is deprecated; use '%s' instead", name, replacement);
@@ -656,6 +657,41 @@ struct CmdFlakeCheck : FlakeCommand
                             for (auto & attr : *vOutput.attrs)
                                 checkNixOSConfiguration(fmt("%s.%s", name, state->symbols[attr.name]),
                                     *attr.value, attr.pos);
+                        }
+
+                        else if (name == "configurations") {
+                            //
+                            // configurations = { }
+                            //
+                            state->forceAttrs(vOutput, pos, "");
+                            if (auto nixos_attr = vOutput.attrs->get(state->symbols.create("nixos"))) {
+                              //
+                              // configurations.nixos = { }
+                              //
+                              state->forceAttrs(*nixos_attr->value, nixos_attr->pos, "");
+                              for (auto & system_attr : *nixos_attr->value->attrs) {
+                                //
+                                // configurations.nixos.<system> = { }
+                                //
+                                state->forceAttrs(*system_attr.value, system_attr.pos, "");
+                                const auto & system_attr_name = state->symbols[system_attr.name];
+                                checkSystemName(system_attr_name, system_attr.pos);
+                                if (checkSystemType(system_attr_name, system_attr.pos)) {
+                                  //
+                                  // configurations.nixos.<system>.<hostname> = { }
+                                  //
+                                  for (auto & attr : *system_attr.value->attrs) {
+                                    checkNixOSConfiguration(
+                                        fmt("%s.%s.%s.%s",
+                                          name,
+                                          state->symbols[nixos_attr->name],
+                                          system_attr_name,
+                                          state->symbols[attr.name]),
+                                        *attr.value, attr.pos);
+                                  }
+                                }
+                              }
+                            }
                         }
 
                         else if (name == "hydraJobs")
@@ -1107,6 +1143,18 @@ struct CmdFlakeShow : FlakeCommand, MixJSON
                     return false;
                 }
 
+                if (attrPathS[0] == "configurations"
+                    && (attrPathS.size() == 1 || attrPathS.size() == 2
+                        || (attrPathS.size() == 3 && attrPathS[1] == "nixos")
+                        )) {
+                    for (const auto &subAttr : visitor2->getAttrs()) {
+                        if (hasContent(*visitor2, attrPath2, subAttr)) {
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+
                 // If we don't recognize it, it's probably content
                 return true;
             } catch (EvalError & e) {
@@ -1191,6 +1239,7 @@ struct CmdFlakeShow : FlakeCommand, MixJSON
                             attrPathS[0] == "defaultPackage"
                             || attrPathS[0] == "devShell"
                             || attrPathS[0] == "formatter"
+                            || attrPathS[0] == "configurations"
                             || attrPathS[0] == "nixosConfigurations"
                             || attrPathS[0] == "nixosModules"
                             || attrPathS[0] == "defaultApp"
@@ -1201,6 +1250,9 @@ struct CmdFlakeShow : FlakeCommand, MixJSON
                             || attrPathS[0] == "packages"
                             || attrPathS[0] == "devShells"
                             || attrPathS[0] == "apps"))
+                    || ((attrPath.size() == 2 || attrPath.size() == 3)
+                        && (attrPathS[0] == "configurations")
+                        && (attrPathS[1] == "nixos"))
                     )
                 {
                     recurse();
@@ -1287,7 +1339,8 @@ struct CmdFlakeShow : FlakeCommand, MixJSON
                     auto [type, description] =
                         (attrPath.size() == 1 && attrPathS[0] == "overlay")
                         || (attrPath.size() == 2 && attrPathS[0] == "overlays") ? std::make_pair("nixpkgs-overlay", "Nixpkgs overlay") :
-                        attrPath.size() == 2 && attrPathS[0] == "nixosConfigurations" ? std::make_pair("nixos-configuration", "NixOS configuration") :
+                        (attrPath.size() == 4 && attrPathS[0] == "configurations" && attrPathS[1] == "nixos") ||
+                        (attrPath.size() == 2 && attrPathS[0] == "nixosConfigurations") ? std::make_pair("nixos-configuration", "NixOS configuration") :
                         (attrPath.size() == 1 && attrPathS[0] == "nixosModule")
                         || (attrPath.size() == 2 && attrPathS[0] == "nixosModules") ? std::make_pair("nixos-module", "NixOS module") :
                         std::make_pair("unknown", "unknown");
